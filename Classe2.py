@@ -449,7 +449,7 @@ class Programme:
                 dic = eval(u)
                 print(dic)
                 if dic['type'] == "umlshape":
-                    if dic['id'].strip().lower() == "import":
+                    if dic['id'].strip().lower() == "<import>":
                         importation = dic["attrs"].split("|")
                         for i in importation:
                             imp.add_import(i)
