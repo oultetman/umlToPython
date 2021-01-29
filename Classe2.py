@@ -33,7 +33,9 @@ class Import:
         return s + "\n\n"
 
     def add_import(self, importation: str):
-        self.importation.append(importation)
+        if importation not in self.importation:
+            self.importation.append(importation)
+
 
 
 class Variable:
@@ -57,11 +59,12 @@ class Variable:
     def str_nom(self):
         return self.nom
 
-    def str_init(self):
-        if self.valInit is not None and self.valInit != "":
-            init = self.valInit
-        else:
-            init = self.nom
+    def str_init(self,init=None):
+        if init is None:
+            if self.valInit is not None and self.valInit != "":
+                init = self.valInit
+            else:
+                init = self.nom
         if self.typeAtt == "" or version < 3.6:
             return "self.{}={}".format(self.nom, init)
         else:
@@ -82,6 +85,7 @@ class Methode:
         self.nom = remplacer(nom.strip(), " ", "_")
         self.variables: List[Variable] = []
         self.instance = True
+        self.multiple = False
         if self.nom.find("<abstract>") >= 0:
             self.nom = self.nom[10:].strip()
             self.abstract = True
@@ -129,6 +133,8 @@ class Methode:
         s = ""
         if self.abstract:
             s = "@abstractmethod\n    "
+        if self.multiple:
+            s+="@dispatch("+self.getSignature()+")\n    "
         if self.instance:
             s += "def " + self.nom + "(self,"
         else:
@@ -144,6 +150,11 @@ class Methode:
             s = ""
         return s
 
+    def getSignature(self):
+        s=""
+        for v in self.variables:
+            s+=v.typeAtt+","
+        return s[:-1]
 
 class Commentaire:
     def __init__(self, nom, texte):
@@ -331,8 +342,12 @@ class Classe:
                         s += ("    " * (tab + 1)) + "super().__init__({})\n".format(param)
                     if len(self.AttributInstance) > 0:
                         tab += 1
+                        param = m.str_noms()
                         for a in self.AttributInstance:
-                            s += "    " * tab + a.str_init() + "\n"
+                            if a.nom in param:
+                                s += "    " * tab + a.str_init(a.nom) + "\n"
+                            else:
+                                s += "    " * tab + a.str_init(a.valInit) + "\n"
                         tab -= 1
                     s += "\n"
                 elif m.abstract or self.interface:
@@ -383,6 +398,17 @@ class Classe:
     def affiche_ordre(self):
         return f"{self.nom} {self.ordre}"
 
+    def dectecte_surchage(self):
+        """determine si des methodes ont été surchargées"""
+        multi=False
+        for i in range(len(self.methodeInstance)-1):
+            for j in range(i+1,len(self.methodeInstance)):
+                if self.methodeInstance[i].nom==self.methodeInstance[j].nom:
+                    self.methodeInstance[i].multiple=True
+                    self.methodeInstance[j].multiple=True
+                    multi=True
+        if multi:
+            imp.add_import("from multipledispatch import dispatch")
 
 class Programme:
     capitalizeClassName = True
@@ -459,6 +485,7 @@ class Programme:
                         if not (self.classeExist(c.nom)):
                             if Programme.capitalizeClassName:
                                 c.nom = c.nom[0].upper() + c.nom[1:]
+                            c.dectecte_surchage()
                             self.classes.append(c)
                 elif dic['type'] == 'comment':
                     c = Commentaire(dic['id'], Decode.decodeChaine(dic['comment']))
@@ -538,7 +565,7 @@ imp = Import()
 
 
 def main():
-    p = Programme("mediatheque.pyns")
+    p = Programme("hdvelh.pyns")
     print(p)
     p.save()
 
